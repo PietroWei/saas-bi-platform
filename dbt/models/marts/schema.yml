@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: company_health_score
+    description: "Composite 0-100 health score per company, refreshed on every dbt run."
+    columns:
+      - name: company_slug
+        tests: [not_null, unique]
+      - name: health_score
+        description: "Blended 0-100 score: sentiment 40% / funding 30% / github 30%."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+            config:
+              severity: warn
+      - name: sentiment_score_0_100
+        tests: [not_null]
+      - name: funding_score_0_100
+        tests: [not_null]
+      - name: github_score_0_100
+        tests: [not_null]
+
+  - name: sentiment_trend
+    description: "Monthly rolling sentiment per company."
+    columns:
+      - name: company_slug
+        tests: [not_null]
+      - name: month_start
+        tests: [not_null]
+
+  - name: hiring_momentum
+    description: "Proxy for hiring velocity via GitHub contributor delta."
+    columns:
+      - name: company_slug
+        tests: [not_null, unique]
+      - name: momentum_flag
+        tests:
+          - accepted_values:
+              values: ["hiring_up", "steady", "hiring_down", "unknown"]

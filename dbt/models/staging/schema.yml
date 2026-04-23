@@ -1,0 +1,45 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: "Landing zone written directly by Airflow DAGs."
+    tables:
+      - name: g2_reviews
+      - name: crunchbase_funding
+      - name: github_activity
+
+models:
+  - name: stg_reviews
+    description: "Cleaned view of G2 reviews."
+    columns:
+      - name: review_id
+        tests: [not_null]
+      - name: company_slug
+        tests: [not_null]
+      - name: rating
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 1
+              max_value: 5
+              inclusive: true
+            config:
+              severity: warn
+
+  - name: stg_funding
+    description: "Cleaned view of Crunchbase funding rounds."
+    columns:
+      - name: round_id
+        tests: [not_null]
+      - name: company_slug
+        tests: [not_null]
+      - name: announced_on
+        tests: [not_null]
+
+  - name: stg_github
+    description: "Cleaned view of daily GitHub activity snapshots."
+    columns:
+      - name: repo_full_name
+        tests: [not_null]
+      - name: snapshot_date
+        tests: [not_null]

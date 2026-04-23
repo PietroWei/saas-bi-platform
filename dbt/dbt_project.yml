@@ -1,0 +1,33 @@
+name: saas_bi
+version: "1.0.0"
+config-version: 2
+
+profile: saas_bi
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+analysis-paths: ["analyses"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  saas_bi:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts
+
+vars:
+  # Health score tuning knobs — exposed here so they can be overridden per env.
+  sentiment_weight:      0.4
+  funding_weight:        0.3
+  github_weight:         0.3
+  funding_recency_years: 3

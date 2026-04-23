@@ -1,0 +1,205 @@
+# SaaS BI Platform
+
+A self-hosted Business Intelligence platform that aggregates **public signals about SaaS companies** — G2 reviews, Crunchbase funding rounds, and GitHub activity — and turns them into two distinct views:
+
+- **Company view** (*lato azienda*) — "how is my company perceived?"
+- **Analyst view** (*lato analyst*) — "is this company healthy? should I bet on it?"
+
+The whole stack comes up with a single `docker-compose up --build`.
+
+---
+
+## Architecture
+
+```
+┌────────────┐   ┌───────────┐   ┌──────────┐   ┌──────────┐   ┌────────────┐
+│  Airflow   │──▶│ Postgres  │──▶│   dbt    │──▶│ FastAPI  │──▶│ Streamlit  │
+│  (ingest)  │   │  raw.*    │   │ marts.*  │   │  :8000   │   │   :8501    │
+└────────────┘   └───────────┘   └──────────┘   └──────────┘   └────────────┘
+```
+
+| Service             | Role                                  | Port  |
+|---------------------|---------------------------------------|-------|
+| `postgres`          | Data warehouse (schemas `raw`, `marts`) | 5432  |
+| `airflow-webserver` | DAG UI                                | 8080  |
+| `airflow-scheduler` | DAG execution                         | –     |
+| `dbt-runner`        | Transformations on demand             | –     |
+| `fastapi-backend`   | REST API                              | 8000  |
+| `streamlit-frontend`| Dashboards                            | 8501  |
+
+Data flow: **DAGs** write to `raw.*` tables → **dbt** materializes `staging` views and `marts` tables → **FastAPI** serves JSON from `marts` → **Streamlit** consumes the API.
+
+---
+
+## Quick start
+
+### 1. Clone and configure
+
+```bash
+git clone <this-repo> saas-bi-platform
+cd saas-bi-platform
+cp .env.example .env
+```
+
+Generate the two Airflow secrets and paste them into `.env`:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Optional: add a `GITHUB_TOKEN` to `.env` to raise the GitHub rate limit from 60 to 5 000 req/h.
+
+### 2. Start the stack
+
+```bash
+docker compose up --build
+```
+
+First boot takes ~2 min (image builds, Airflow metadata init, Postgres seed).
+
+| URL                          | Credentials        |
+|------------------------------|--------------------|
+| http://localhost:8080        | `admin` / `admin`  |
+| http://localhost:8000/docs   | —                  |
+| http://localhost:8501        | —                  |
+
+### 3. Trigger the pipelines
+
+In Airflow, unpause and trigger:
+
+1. `g2_reviews_dag`
+2. `crunchbase_dag`
+3. `github_activity_dag`
+
+Then run the transformations:
+
+```bash
+docker compose run --rm dbt-runner dbt build
+```
+
+Open Streamlit at http://localhost:8501 — the dashboards will populate.
+
+---
+
+## Local development without Docker
+
+A conda environment is provided (mirrors the `repair_gui` setup with Python 3.12):
+
+```bash
+conda env create -f environment.yml
+conda activate saas_bi
+```
+
+You can now run unit tests, lint with `ruff`, and iterate on DAG / dbt / FastAPI code without rebuilding containers.
+
+```bash
+# Run the API alone against a local Postgres
+uvicorn backend.main:app --reload --port 8000
+
+# Render Streamlit alone
+streamlit run frontend/app/main.py
+
+# Parse a DAG file for syntax errors
+python airflow/dags/g2_reviews_dag.py
+```
+
+---
+
+## Project structure
+
+```
+saas-bi-platform/
+├── docker-compose.yml
+├── .env.example
+├── environment.yml            ← conda env (Python 3.12)
+├── README.md
+├── CLAUDE.md
+├── airflow/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── dags/
+│       ├── g2_reviews_dag.py       ← scrapes G2 listings (requests + bs4)
+│       ├── crunchbase_dag.py       ← pulls funding events
+│       └── github_activity_dag.py  ← pulls repo stats
+├── dbt/
+│   ├── Dockerfile
+│   ├── dbt_project.yml
+│   ├── profiles.yml
+│   └── models/
+│       ├── staging/                ← stg_reviews, stg_funding, stg_github + schema.yml
+│       └── marts/                  ← company_health_score, sentiment_trend, hiring_momentum + schema.yml
+├── backend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── main.py
+│   └── routers/                    ← companies, health_score, reviews
+├── frontend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── app/
+│       ├── main.py
+│       ├── pages/                  ← company_view, analyst_view
+│       └── components/             ← health_score_card, sentiment_chart, funding_timeline
+└── database/
+    └── init/
+        ├── 01_create_schemas.sql
+        └── 02_create_raw_tables.sql
+```
+
+---
+
+## Data model
+
+### Raw layer (schema `raw`)
+
+| Table                    | Grain                                | Source            |
+|--------------------------|--------------------------------------|-------------------|
+| `raw.g2_reviews`         | one row per review                   | G2 listing scrape |
+| `raw.crunchbase_funding` | one row per funding round            | Crunchbase API    |
+| `raw.github_activity`    | one row per repo / day snapshot      | GitHub API        |
+
+### Marts (schema `marts`)
+
+- `company_health_score` — composite 0–100 score combining sentiment, funding recency, GitHub activity.
+- `sentiment_trend` — monthly rolling sentiment per company (for the time-series chart).
+- `hiring_momentum` — derived signal from GitHub contributor growth, used as a hiring proxy.
+
+Weighting of the health score lives in `dbt/models/marts/company_health_score.sql` — change it there, nowhere else.
+
+---
+
+## API cheatsheet
+
+| Method | Path                                    | Purpose                               |
+|--------|-----------------------------------------|---------------------------------------|
+| GET    | `/health`                               | liveness probe                        |
+| GET    | `/companies`                            | list companies (with optional `q=` search) |
+| GET    | `/companies/{name}/health-score`        | single 0–100 score + breakdown        |
+| GET    | `/companies/{name}/reviews`             | reviews + sentiment                   |
+| GET    | `/companies/{name}/funding`             | funding timeline                      |
+
+Interactive docs at http://localhost:8000/docs (Swagger UI, auto-generated).
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `AIRFLOW_FERNET_KEY` complaint at boot | Generate a real Fernet key and put it in `.env`. |
+| Streamlit shows empty charts | Trigger DAGs, then `docker compose run --rm dbt-runner dbt build`. |
+| G2 scraper returns 0 rows | G2 throttles aggressively — the DAG logs a warning and exits cleanly; rerun later. |
+| Port already in use | Change the left-hand port in `docker-compose.yml` (e.g. `8001:8000`). |
+
+Logs:
+```bash
+docker compose logs -f airflow-scheduler
+docker compose logs -f fastapi-backend
+```
+
+---
+
+## License
+
+MIT
