@@ -1,4 +1,4 @@
-"""Backend configuration — driven entirely by environment variables."""
+"""Backend configuration - driven entirely by environment variables."""
 
 from __future__ import annotations
 

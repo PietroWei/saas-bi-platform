@@ -23,8 +23,8 @@ models:
               min_value: 1
               max_value: 5
               inclusive: true
-            config:
-              severity: warn
+              config:
+                severity: warn
 
   - name: stg_funding
     description: "Cleaned view of Crunchbase funding rounds."

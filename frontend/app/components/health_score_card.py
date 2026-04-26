@@ -1,4 +1,4 @@
-"""Health score card — big gauge + component breakdown."""
+"""Health score card - big gauge + component breakdown."""
 
 from __future__ import annotations
 

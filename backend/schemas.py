@@ -11,12 +11,17 @@ from pydantic import BaseModel, Field
 class Company(BaseModel):
     company_slug: str
     company_name: str
+    industry: Optional[str] = None
+    country: Optional[str] = None
     health_score: Optional[float] = None
 
 
 class HealthScoreBreakdown(BaseModel):
     company_slug: str
     company_name: str
+    industry: Optional[str] = None
+    country: Optional[str] = None
+    founded_year: Optional[int] = None
     health_score: float = Field(..., ge=0, le=100)
     sentiment_score_0_100: float
     funding_score_0_100: float

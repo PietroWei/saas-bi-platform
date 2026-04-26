@@ -2,7 +2,7 @@
 
 Crunchbase's full API is paid; for the demo we hit a free public mirror
 (``https://api.crunchbase.com/api/v4`` by default, configurable through
-``CRUNCHBASE_API_BASE``). If no API key is configured the task still runs —
+``CRUNCHBASE_API_BASE``). If no API key is configured the task still runs -
 it falls back to a small bundled sample so the downstream pipeline has data
 to chew on.
 """
@@ -26,20 +26,35 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 log = logging.getLogger(__name__)
 
 TRACKED_COMPANIES: list[dict[str, str]] = [
-    {"name": "Slack",    "slug": "slack"},
-    {"name": "Notion",   "slug": "notion-so"},
-    {"name": "Figma",    "slug": "figma"},
-    {"name": "Asana",    "slug": "asana"},
-    {"name": "Airtable", "slug": "airtable"},
+    # --- Workplace SaaS
+    {"name": "Slack",     "slug": "slack"},
+    {"name": "Notion",    "slug": "notion"},
+    {"name": "Figma",     "slug": "figma"},
+    {"name": "Asana",     "slug": "asana"},
+    {"name": "Airtable",  "slug": "airtable"},
+    # --- Fintech / payments
+    {"name": "Satispay",  "slug": "satispay"},
+    {"name": "Nexi",      "slug": "nexi"},
+    {"name": "Revolut",   "slug": "revolut"},
+    {"name": "Klarna",    "slug": "klarna"},
+    {"name": "N26",       "slug": "n26"},
+    # --- Capital markets / treasury software
+    {"name": "Murex",     "slug": "murex"},
+    {"name": "Finastra",  "slug": "finastra"},
+    {"name": "Calypso",   "slug": "calypso"},
+    {"name": "FIS",       "slug": "fis"},
+    {"name": "Bloomberg", "slug": "bloomberg"},
 ]
 
-# Fallback sample used when no API key is set — deterministic & dependency-free.
+# Fallback sample used when no API key is set - deterministic & dependency-free.
+# All company_slug values must match TRACKED_COMPANIES above.
 SAMPLE_ROUNDS: list[dict[str, Any]] = [
+    # --- Workplace SaaS
     {"company_name": "Slack",    "company_slug": "slack",
      "round_id": "slack-seriesH", "round_type": "Series H",
      "announced_on": "2019-06-20", "amount_usd": 427_000_000,
      "lead_investor": "SoftBank", "investors": "SoftBank, Accel"},
-    {"company_name": "Notion",   "company_slug": "notion-so",
+    {"company_name": "Notion",   "company_slug": "notion",
      "round_id": "notion-seriesC", "round_type": "Series C",
      "announced_on": "2021-10-08", "amount_usd": 275_000_000,
      "lead_investor": "Coatue", "investors": "Coatue, Sequoia"},
@@ -55,6 +70,78 @@ SAMPLE_ROUNDS: list[dict[str, Any]] = [
      "round_id": "airtable-seriesF", "round_type": "Series F",
      "announced_on": "2021-12-14", "amount_usd": 735_000_000,
      "lead_investor": "XN", "investors": "XN, Thrive Capital"},
+
+    # --- Fintech / payments
+    {"company_name": "Satispay", "company_slug": "satispay",
+     "round_id": "satispay-seriesC", "round_type": "Series C",
+     "announced_on": "2020-11-26", "amount_usd": 102_000_000,
+     "lead_investor": "Square (Block)", "investors": "Square, TIM Ventures, LGT Lightstone"},
+    {"company_name": "Satispay", "company_slug": "satispay",
+     "round_id": "satispay-seriesD", "round_type": "Series D",
+     "announced_on": "2022-09-22", "amount_usd": 320_000_000,
+     "lead_investor": "Addition", "investors": "Addition, Greyhound, Coatue, Tencent"},
+    {"company_name": "Nexi",     "company_slug": "nexi",
+     "round_id": "nexi-ipo", "round_type": "IPO",
+     "announced_on": "2019-04-16", "amount_usd": 2_300_000_000,
+     "lead_investor": None, "investors": "Public markets (Borsa Italiana)"},
+    {"company_name": "Nexi",     "company_slug": "nexi",
+     "round_id": "nexi-merger-sia", "round_type": "M&A",
+     "announced_on": "2020-10-05", "amount_usd": 5_000_000_000,
+     "lead_investor": None, "investors": "All-stock merger with SIA"},
+    {"company_name": "Revolut",  "company_slug": "revolut",
+     "round_id": "revolut-seriesE", "round_type": "Series E",
+     "announced_on": "2021-07-15", "amount_usd": 800_000_000,
+     "lead_investor": "SoftBank, Tiger Global", "investors": "SoftBank, Tiger Global"},
+    {"company_name": "Revolut",  "company_slug": "revolut",
+     "round_id": "revolut-secondary-2024", "round_type": "Secondary",
+     "announced_on": "2024-08-16", "amount_usd": 500_000_000,
+     "lead_investor": "Coatue", "investors": "Coatue, D1, Tiger Global"},
+    {"company_name": "Klarna",   "company_slug": "klarna",
+     "round_id": "klarna-seriesH-2021", "round_type": "Series H",
+     "announced_on": "2021-06-10", "amount_usd": 639_000_000,
+     "lead_investor": "SoftBank Vision Fund 2", "investors": "SoftBank, Sequoia"},
+    {"company_name": "Klarna",   "company_slug": "klarna",
+     "round_id": "klarna-down-2022", "round_type": "Down round",
+     "announced_on": "2022-07-11", "amount_usd": 800_000_000,
+     "lead_investor": "Sequoia", "investors": "Sequoia, Mubadala, Canada Pension Plan"},
+    {"company_name": "N26",      "company_slug": "n26",
+     "round_id": "n26-seriesE", "round_type": "Series E",
+     "announced_on": "2021-10-18", "amount_usd": 900_000_000,
+     "lead_investor": "Third Point, Coatue", "investors": "Third Point, Coatue, Dragoneer"},
+
+    # --- Capital markets / treasury software
+    {"company_name": "Murex",    "company_slug": "murex",
+     "round_id": "murex-secondary-2014", "round_type": "Secondary",
+     "announced_on": "2014-04-15", "amount_usd": 500_000_000,
+     "lead_investor": "Bpifrance", "investors": "Bpifrance, founders"},
+    {"company_name": "Finastra", "company_slug": "finastra",
+     "round_id": "finastra-formation-2017", "round_type": "M&A",
+     "announced_on": "2017-06-01", "amount_usd": 3_500_000_000,
+     "lead_investor": "Vista Equity Partners", "investors": "Vista Equity (Misys + DH merger)"},
+    {"company_name": "Finastra", "company_slug": "finastra",
+     "round_id": "finastra-refi-2023", "round_type": "Debt financing",
+     "announced_on": "2023-09-21", "amount_usd": 5_300_000_000,
+     "lead_investor": "Vista Equity, Oak Hill", "investors": "Private credit consortium"},
+    {"company_name": "Calypso",  "company_slug": "calypso",
+     "round_id": "calypso-acq-thoma-2021", "round_type": "Acquisition",
+     "announced_on": "2021-03-04", "amount_usd": 3_700_000_000,
+     "lead_investor": "Thoma Bravo", "investors": "Thoma Bravo (formed Adenza)"},
+    {"company_name": "Calypso",  "company_slug": "calypso",
+     "round_id": "adenza-acq-nasdaq-2023", "round_type": "Acquisition",
+     "announced_on": "2023-06-12", "amount_usd": 10_500_000_000,
+     "lead_investor": "Nasdaq", "investors": "Acquired by Nasdaq from Thoma Bravo"},
+    {"company_name": "FIS",      "company_slug": "fis",
+     "round_id": "fis-acq-worldpay-2019", "round_type": "Acquisition",
+     "announced_on": "2019-03-18", "amount_usd": 43_000_000_000,
+     "lead_investor": None, "investors": "FIS acquired Worldpay"},
+    {"company_name": "FIS",      "company_slug": "fis",
+     "round_id": "fis-spinoff-worldpay-2024", "round_type": "Spin-off",
+     "announced_on": "2024-01-31", "amount_usd": 18_500_000_000,
+     "lead_investor": "GTCR", "investors": "GTCR took majority stake in Worldpay"},
+    {"company_name": "Bloomberg","company_slug": "bloomberg",
+     "round_id": "bloomberg-private", "round_type": "Private",
+     "announced_on": "1981-10-01", "amount_usd": 10_000_000,
+     "lead_investor": "Merrill Lynch", "investors": "Founders + Merrill Lynch"},
 ]
 
 
@@ -75,7 +162,7 @@ def _fetch_company_rounds(slug: str, api_key: str, api_base: str) -> list[dict[s
     }
     resp = requests.get(url, params=params, timeout=20)
     if resp.status_code == 404:
-        log.warning("Crunchbase 404 for %s — skipping", slug)
+        log.warning("Crunchbase 404 for %s - skipping", slug)
         return []
     resp.raise_for_status()
     payload = resp.json()
@@ -142,7 +229,7 @@ def ingest_funding(**_: Any) -> None:
 
     all_rows: list[dict[str, Any]] = []
     if not api_key:
-        log.warning("CRUNCHBASE_API_KEY not set — loading bundled sample.")
+        log.warning("CRUNCHBASE_API_KEY not set - loading bundled sample.")
         for sample in SAMPLE_ROUNDS:
             row = dict(sample)
             row["currency"] = "USD"
@@ -162,7 +249,7 @@ def ingest_funding(**_: Any) -> None:
 
     df = _clean(all_rows)
     count = _upsert(engine, df)
-    log.info("Crunchbase ingestion complete — %d rows written", count)
+    log.info("Crunchbase ingestion complete - %d rows written", count)
 
 
 default_args = {

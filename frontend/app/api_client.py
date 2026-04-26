@@ -23,13 +23,25 @@ def _get(path: str, params: dict[str, Any] | None = None) -> Any:
 
 
 @st.cache_data(ttl=60)
-def list_companies(q: str | None = None, limit: int = 50) -> list[dict]:
-    return _get("/companies", {"q": q, "limit": limit}) or []
+def list_companies(
+    q: str | None = None, industry: str | None = None, limit: int = 50
+) -> list[dict]:
+    params: dict[str, Any] = {"limit": limit}
+    if q:
+        params["q"] = q
+    if industry:
+        params["industry"] = industry
+    return _get("/companies", params) or []
 
 
 @st.cache_data(ttl=60)
 def search_companies(q: str, limit: int = 10) -> list[dict]:
     return _get("/companies/search", {"q": q, "limit": limit}) or []
+
+
+@st.cache_data(ttl=300)
+def list_industries() -> list[str]:
+    return _get("/companies/industries") or []
 
 
 @st.cache_data(ttl=60)
@@ -50,3 +62,11 @@ def get_funding(name: str) -> list[dict]:
 @st.cache_data(ttl=60)
 def get_sentiment_trend(name: str) -> list[dict]:
     return _get(f"/companies/{name}/sentiment-trend") or []
+
+
+def compare_companies(slugs: list[str]) -> list[dict]:
+    """Side-by-side breakdown for 2-5 companies. Order matches the input."""
+    if not slugs or len(slugs) < 2:
+        return []
+    # requests serialises lists by repeating the param: slug=a&slug=b...
+    return _get("/companies/compare", {"slug": slugs}) or []

@@ -1,6 +1,4 @@
-version: "3.9"
-
-# SaaS BI Platform — container orchestration
+# SaaS BI Platform - container orchestration
 # Bring the full stack up with:  docker-compose --env-file .env up --build
 
 x-airflow-common: &airflow-common

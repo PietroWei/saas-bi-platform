@@ -1,4 +1,4 @@
-"""/companies/{name}/health-score — composite score + breakdown."""
+"""/companies/{name}/health-score - composite score + breakdown."""
 
 from __future__ import annotations
 
@@ -26,10 +26,11 @@ async def get_health_score(
     Matches either the canonical ``company_slug`` or ``company_name`` (case-insensitive).
     """
     sql = """
-        SELECT company_slug, company_name, health_score,
-               sentiment_score_0_100, funding_score_0_100, github_score_0_100,
-               review_count_180d, total_raised_usd, last_round_date,
-               total_stars, total_commits_30d, total_contributors_30d, computed_at
+        SELECT company_slug, company_name, industry, country, founded_year,
+               health_score, sentiment_score_0_100, funding_score_0_100,
+               github_score_0_100, review_count_180d, total_raised_usd,
+               last_round_date, total_stars, total_commits_30d,
+               total_contributors_30d, computed_at
           FROM marts.company_health_score
          WHERE lower(company_slug) = lower(:n)
             OR lower(company_name) = lower(:n)

@@ -1,4 +1,4 @@
-"""Funding timeline — scatter of rounds over time, sized by amount."""
+"""Funding timeline - scatter of rounds over time, sized by amount."""
 
 from __future__ import annotations
 

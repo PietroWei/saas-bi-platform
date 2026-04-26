@@ -26,7 +26,7 @@ models:
       +schema: marts
 
 vars:
-  # Health score tuning knobs — exposed here so they can be overridden per env.
+  # Health score tuning knobs - exposed here so they can be overridden per env.
   sentiment_weight:      0.4
   funding_weight:        0.3
   github_weight:         0.3

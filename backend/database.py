@@ -30,7 +30,7 @@ SessionLocal = async_sessionmaker(
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency — yields an async DB session scoped to one request."""
+    """FastAPI dependency - yields an async DB session scoped to one request."""
     async with SessionLocal() as session:
         try:
             yield session

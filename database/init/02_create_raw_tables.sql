@@ -1,11 +1,11 @@
 -- ======================================================================
--- SaaS BI Platform — raw landing tables
+-- SaaS BI Platform - raw landing tables
 -- One table per upstream source. Natural keys are enforced with UNIQUE
 -- constraints so that Airflow loaders can safely use ON CONFLICT DO NOTHING.
 -- ======================================================================
 
 -- --------------------------------------------------------------------
--- raw.g2_reviews — scraped G2 reviews
+-- raw.g2_reviews - scraped G2 reviews
 -- --------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS raw.g2_reviews (
     id              BIGSERIAL PRIMARY KEY,
@@ -30,7 +30,7 @@ CREATE INDEX IF NOT EXISTS ix_g2_reviews_date    ON raw.g2_reviews (review_date)
 COMMENT ON TABLE raw.g2_reviews IS 'One row per individual G2 review.';
 
 -- --------------------------------------------------------------------
--- raw.crunchbase_funding — funding rounds
+-- raw.crunchbase_funding - funding rounds
 -- --------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS raw.crunchbase_funding (
     id              BIGSERIAL PRIMARY KEY,
@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS ix_cb_funding_date    ON raw.crunchbase_funding (anno
 COMMENT ON TABLE raw.crunchbase_funding IS 'One row per funding round for tracked companies.';
 
 -- --------------------------------------------------------------------
--- raw.github_activity — daily repo snapshot
+-- raw.github_activity - daily repo snapshot
 -- --------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS raw.github_activity (
     id                BIGSERIAL PRIMARY KEY,

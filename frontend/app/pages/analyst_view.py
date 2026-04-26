@@ -1,4 +1,4 @@
-"""Analyst View (lato analyst) — due-diligence dashboard for any tracked company.
+"""Analyst View (lato analyst) - due-diligence dashboard for any tracked company.
 
 Auto-discovered by Streamlit as a separate page.
 """
@@ -15,23 +15,25 @@ from api_client import (
     search_companies,
 )
 from components import funding_timeline, health_score_card, sentiment_chart
+from theme import apply, hero, industry_pill_class
 
 st.set_page_config(page_title="Analyst View", page_icon="🔎", layout="wide")
+apply()
 
 
 def _red_flags(score: dict, reviews: list[dict], funding: list[dict]) -> list[str]:
     """Compute ad-hoc warnings an analyst would care about."""
     flags: list[str] = []
     if score.get("health_score") is not None and score["health_score"] < 40:
-        flags.append("Overall health score below 40/100 — broadly unhealthy.")
+        flags.append("Overall health score below 40/100 - broadly unhealthy.")
     if score.get("sentiment_score_0_100") is not None and score["sentiment_score_0_100"] < 45:
-        flags.append("Review sentiment below neutral — customers unhappy.")
+        flags.append("Review sentiment below neutral - customers unhappy.")
     if score.get("github_score_0_100") is not None and score["github_score_0_100"] < 20:
-        flags.append("GitHub activity very low — engineering output may be stalling.")
+        flags.append("GitHub activity very low - engineering output may be stalling.")
     if score.get("last_round_date") is None:
         flags.append("No funding rounds in the tracked recency window.")
     if reviews and len(reviews) < 5:
-        flags.append(f"Only {len(reviews)} reviews captured — low confidence.")
+        flags.append(f"Only {len(reviews)} reviews captured - low confidence.")
     if funding:
         latest = max(r["announced_on"] for r in funding if r.get("announced_on"))
         if str(latest) < "2022-01-01":
@@ -40,10 +42,13 @@ def _red_flags(score: dict, reviews: list[dict], funding: list[dict]) -> list[st
 
 
 def render() -> None:
-    st.title("🔎 Analyst View")
-    st.caption("Due-diligence on any SaaS company tracked by the platform.")
+    hero(
+        "🔎 Analyst View",
+        "Due-diligence dossier on any company tracked by the platform - "
+        "score, funding, sentiment and red flags.",
+    )
 
-    query = st.text_input("Search companies", value="", placeholder="e.g. notion, slack…")
+    query = st.text_input("Search companies", value="", placeholder="e.g. satispay, murex, slack…")
     if not query:
         st.info("Type at least one character to search.")
         return
@@ -62,7 +67,18 @@ def render() -> None:
         st.error("No health score for this company yet.")
         return
 
-    st.subheader(f"{score['company_name']} — analyst dossier")
+    pill = (
+        f"<span class='{industry_pill_class(score.get('industry'))}'>"
+        f"{score.get('industry') or 'n/a'}</span>"
+    )
+    sub = (score.get("country") or "")
+    if score.get("founded_year"):
+        sub += f" · founded {score['founded_year']}"
+    st.markdown(
+        f"### {score['company_name']} - analyst dossier &nbsp; {pill}<br>"
+        f"<span class='bi-rank-meta'>{sub}</span>",
+        unsafe_allow_html=True,
+    )
     health_score_card.render(score)
 
     c1, c2, c3 = st.columns(3)

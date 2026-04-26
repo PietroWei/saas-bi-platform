@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(C:/Users/pietr/anaconda3/envs/repair_gui/python.exe --version)",
-      "Bash(python -c \"import ast, pathlib; [ast.parse\\(p.read_text\\(encoding='utf-8'\\)\\) for p in pathlib.Path\\('.'\\).rglob\\('*.py'\\) if '.git' not in p.parts and '.sixth' not in p.parts]; print\\('All Python files parse cleanly.'\\)\")"
+      "Bash(python -c \"import ast, pathlib; [ast.parse\\(p.read_text\\(encoding='utf-8'\\)\\) for p in pathlib.Path\\('.'\\).rglob\\('*.py'\\) if '.git' not in p.parts and '.sixth' not in p.parts]; print\\('All Python files parse cleanly.'\\)\")",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "PowerShell(Get-Command *)",
+      "Bash(python *)"
     ]
   }
 }

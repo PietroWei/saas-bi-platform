@@ -3,9 +3,9 @@
 -- ===================================================================
 -- company_health_score
 -- Produces a 0-100 health score per tracked company by blending:
---   * sentiment      — mean of review sentiment in the last 180 days
---   * funding        — recency-decayed sum of last funding rounds
---   * github         — commits + contributors + star log, last snapshot
+--   * sentiment      - mean of review sentiment in the last 180 days
+--   * funding        - recency-decayed sum of last funding rounds
+--   * github         - commits + contributors + star log, last snapshot
 -- Weights live in dbt_project.yml so they can be tuned per env.
 -- ===================================================================
 
@@ -60,12 +60,16 @@ companies as (
     select company_slug from sentiment
     union select company_slug from funding
     union select company_slug from github
+    union select company_slug from {{ ref('dim_companies') }}
 ),
 
 scored as (
     select
         c.company_slug,
-        coalesce(s.company_name, c.company_slug) as company_name,
+        coalesce(d.company_name, s.company_name, c.company_slug) as company_name,
+        d.industry,
+        d.country,
+        d.founded_year,
 
         -- sentiment component: map [-1, 1] → [0, 100]. null → 50 (neutral).
         round(
@@ -109,11 +113,15 @@ scored as (
     left join sentiment s using (company_slug)
     left join funding   f using (company_slug)
     left join github    g using (company_slug)
+    left join {{ ref('dim_companies') }} d using (company_slug)
 )
 
 select
     company_slug,
     company_name,
+    industry,
+    country,
+    founded_year,
     sentiment_score_0_100,
     funding_score_0_100,
     github_score_0_100,

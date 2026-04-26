@@ -1,5 +1,5 @@
 -- ======================================================================
--- SaaS BI Platform — schema bootstrap
+-- SaaS BI Platform - schema bootstrap
 -- Executed automatically by the postgres image on first boot.
 -- ======================================================================
 
@@ -8,9 +8,9 @@ CREATE SCHEMA IF NOT EXISTS raw;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS marts;
 
-COMMENT ON SCHEMA raw     IS 'Landing zone — untyped ingest from Airflow DAGs.';
-COMMENT ON SCHEMA staging IS 'dbt staging views — cleaned + typed.';
-COMMENT ON SCHEMA marts   IS 'dbt marts — business-ready aggregates.';
+COMMENT ON SCHEMA raw     IS 'Landing zone - untyped ingest from Airflow DAGs.';
+COMMENT ON SCHEMA staging IS 'dbt staging views - cleaned + typed.';
+COMMENT ON SCHEMA marts   IS 'dbt marts - business-ready aggregates.';
 
 -- Airflow needs its own logical database (not just a schema) so that its
 -- metadata migrations can own the public schema without colliding with ours.

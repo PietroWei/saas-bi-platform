@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-SaaS BI Platform — ingests public data about SaaS companies (G2 reviews, Crunchbase funding, GitHub activity), transforms it with dbt, serves it via FastAPI, and visualizes it in Streamlit. Everything is containerized.
+SaaS BI Platform - ingests public data about SaaS companies (G2 reviews, Crunchbase funding, GitHub activity), transforms it with dbt, serves it via FastAPI, and visualizes it in Streamlit. Everything is containerized.
 
 ## Stack
 
@@ -12,7 +12,7 @@ SaaS BI Platform — ingests public data about SaaS companies (G2 reviews, Crunc
 |------------------|-------------------------------|------|
 | Ingest / orchestr| Airflow 2.9 (LocalExecutor)   | 8080 |
 | Storage          | Postgres 15                   | 5432 |
-| Transform        | dbt-postgres 1.8              | —    |
+| Transform        | dbt-postgres 1.8              | -    |
 | API              | FastAPI + SQLAlchemy async    | 8000 |
 | Frontend         | Streamlit + Plotly            | 8501 |
 
@@ -33,11 +33,11 @@ Data flow: `DAGs → raw.* → dbt staging → dbt marts → FastAPI → Streaml
 ## Conventions
 
 - Python 3.12. Type hints on all public functions. Docstrings where intent is not obvious.
-- Never hardcode credentials — use env vars through `python-dotenv` / `pydantic-settings`.
+- Never hardcode credentials - use env vars through `python-dotenv` / `pydantic-settings`.
 - Raw tables live in schema `raw`, transformed tables in schema `marts`.
 - dbt materializes staging as views, marts as tables.
 - All DAGs idempotent: `raw` tables have `UNIQUE` keys, loaders use `INSERT ... ON CONFLICT DO NOTHING`.
-- The `company_health_score` mart is the canonical 0–100 health metric; changes to weighting must update `dbt/models/marts/company_health_score.sql`.
+- The `company_health_score` mart is the canonical 0-100 health metric; changes to weighting must update `dbt/models/marts/company_health_score.sql`.
 
 ## Running locally
 

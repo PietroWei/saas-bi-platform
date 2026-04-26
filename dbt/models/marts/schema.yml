@@ -1,6 +1,16 @@
 version: 2
 
 models:
+  - name: dim_companies
+    description: "Static dimension of tracked companies - industry, country, founded year."
+    columns:
+      - name: company_slug
+        tests: [not_null, unique]
+      - name: company_name
+        tests: [not_null]
+      - name: industry
+        tests: [not_null]
+
   - name: company_health_score
     description: "Composite 0-100 health score per company, refreshed on every dbt run."
     columns:
@@ -14,14 +24,16 @@ models:
               min_value: 0
               max_value: 100
               inclusive: true
-            config:
-              severity: warn
+              config:
+                severity: warn
       - name: sentiment_score_0_100
         tests: [not_null]
       - name: funding_score_0_100
         tests: [not_null]
       - name: github_score_0_100
         tests: [not_null]
+      - name: industry
+        description: "Joined from dim_companies - used by the Compare view to group peers."
 
   - name: sentiment_trend
     description: "Monthly rolling sentiment per company."

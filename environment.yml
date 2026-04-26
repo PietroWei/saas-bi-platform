@@ -6,7 +6,7 @@ dependencies:
   - python=3.12
   - pip
   - pip:
-      # Orchestration (local testing of DAG code — runs inside Docker in prod)
+      # Orchestration (local testing of DAG code - runs inside Docker in prod)
       - apache-airflow==2.9.3
       # Transformation
       - dbt-core==1.8.4

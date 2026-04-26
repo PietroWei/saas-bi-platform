@@ -1,4 +1,4 @@
-"""Company View (lato azienda) — perception of your own company.
+"""Company View (lato azienda) - perception of your own company.
 
 Auto-discovered by Streamlit as a separate page.
 """
@@ -17,24 +17,28 @@ from api_client import (
     list_companies,
 )
 from components import health_score_card, sentiment_chart
+from theme import apply, hero, industry_pill_class
 
 st.set_page_config(page_title="Company View", page_icon="🏢", layout="wide")
+apply()
 
 
 def _category_average(exclude_slug: str) -> float | None:
-    """Mean health score across the other tracked companies — used as a baseline."""
+    """Mean health score across the other tracked companies - used as a baseline."""
     peers = [c for c in list_companies(limit=500) if c["company_slug"] != exclude_slug]
     scores = [c["health_score"] for c in peers if c.get("health_score") is not None]
     return mean(scores) if scores else None
 
 
 def render() -> None:
-    st.title("🏢 Company View")
-    st.caption("How is your company perceived in the market right now?")
+    hero(
+        "🏢 Company View",
+        "How is your company perceived in the market right now?",
+    )
 
     companies = list_companies(limit=500)
     if not companies:
-        st.warning("No companies indexed yet — run DAGs + `dbt build` first.")
+        st.warning("No companies indexed yet - run DAGs + `dbt build` first.")
         return
 
     names = [c["company_name"] for c in companies]
@@ -46,7 +50,18 @@ def render() -> None:
         st.error(f"No health score for {choice} yet.")
         return
 
-    st.subheader(f"{score['company_name']} — at a glance")
+    pill = (
+        f"<span class='{industry_pill_class(score.get('industry'))}'>"
+        f"{score.get('industry') or 'n/a'}</span>"
+    )
+    country = score.get("country") or ""
+    founded = score.get("founded_year")
+    sub = f"{country}" + (f" · founded {founded}" if founded else "")
+    st.markdown(
+        f"### {score['company_name']} &nbsp; {pill}<br>"
+        f"<span class='bi-rank-meta'>{sub}</span>",
+        unsafe_allow_html=True,
+    )
     health_score_card.render(score)
 
     baseline = _category_average(slug)
@@ -80,7 +95,7 @@ def render() -> None:
                 st.markdown(f"**{row.get('review_title') or '(no title)'}**")
                 st.write(row.get("review_body") or "")
             with cols[1]:
-                st.metric("Rating", row.get("rating") or "—")
+                st.metric("Rating", row.get("rating") or "-")
                 st.metric("Sentiment", f"{(row.get('sentiment_score') or 0):+.2f}")
                 if row.get("review_date"):
                     st.caption(str(row["review_date"]))

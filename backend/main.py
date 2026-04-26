@@ -29,7 +29,7 @@ async def lifespan(_: FastAPI):
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         log.info("Database connection OK.")
-    except Exception as exc:  # pragma: no cover — diagnostic only
+    except Exception as exc:  # pragma: no cover - diagnostic only
         log.exception("Database connection failed at startup: %s", exc)
     yield
     await engine.dispose()
