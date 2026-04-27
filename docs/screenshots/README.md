@@ -6,9 +6,9 @@ Drop the PNGs referenced from the project root README here. Suggested names
 | File                  | Page it captures                                  |
 |-----------------------|---------------------------------------------------|
 | `landing.png`         | Landing - top performers + leaderboard            |
-| `company_view.png`    | Company View - gauge + sentiment trend            |
+| `company_view.png`    | Company View - gauge + HN mention sentiment trend |
 | `analyst_view.png`    | Analyst View - funding timeline + red flags       |
-| `compare_view.png`    | Compare View - radar chart + sentiment overlay    |
+| `compare_view.png`    | Compare View - radar chart + HN sentiment overlay |
 
 To take a screenshot:
 

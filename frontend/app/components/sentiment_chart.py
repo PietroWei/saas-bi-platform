@@ -25,18 +25,18 @@ def render(trend: list[dict]) -> None:
             "value":         "Sentiment (-1 … +1)",
             "variable":      "Series",
         },
-        title="Review sentiment over time",
+        title="HackerNews mention sentiment over time",
     )
     fig.update_layout(hovermode="x unified", height=420,
                       legend=dict(orientation="h", y=-0.2))
     fig.update_yaxes(range=[-1, 1])
     st.plotly_chart(fig, use_container_width=True)
 
-    if df["review_count"].sum() > 0:
+    if df["mention_count"].sum() > 0:
         bar = px.bar(
-            df, x="month_start", y="review_count",
-            labels={"review_count": "Reviews", "month_start": "Month"},
-            title="Review volume",
+            df, x="month_start", y="mention_count",
+            labels={"mention_count": "Mentions", "month_start": "Month"},
+            title="Mention volume",
         )
         bar.update_layout(height=260)
         st.plotly_chart(bar, use_container_width=True)

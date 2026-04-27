@@ -47,7 +47,7 @@ def main() -> None:
     hero(
         "📊 SaaS BI Platform",
         "Public-signal analytics for SaaS, fintech and capital-markets vendors - "
-        "G2 reviews, funding rounds and engineering activity blended into a single "
+        "HackerNews mentions, funding rounds and engineering activity blended into a single "
         "<b>0-100 health score</b>.",
     )
 

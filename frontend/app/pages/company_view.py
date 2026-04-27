@@ -12,7 +12,7 @@ import streamlit as st
 
 from api_client import (
     get_health_score,
-    get_reviews,
+    get_mentions,
     get_sentiment_trend,
     list_companies,
 )
@@ -78,29 +78,32 @@ def render() -> None:
     sentiment_chart.render(get_sentiment_trend(slug))
 
     st.divider()
-    st.subheader("Recent reviews")
-    reviews = get_reviews(slug, limit=20)
-    if not reviews:
-        st.info("No reviews on record.")
+    st.subheader("Recent HackerNews mentions")
+    mentions = get_mentions(slug, limit=20)
+    if not mentions:
+        st.info("No HN mentions on record.")
         return
 
-    df = pd.DataFrame(reviews)
-    if "review_date" in df.columns:
-        df = df.sort_values("review_date", ascending=False, na_position="last")
+    df = pd.DataFrame(mentions)
+    if "mention_date" in df.columns:
+        df = df.sort_values("mention_date", ascending=False, na_position="last")
 
     for _, row in df.head(10).iterrows():
         with st.container(border=True):
             cols = st.columns([3, 1])
             with cols[0]:
-                st.markdown(f"**{row.get('review_title') or '(no title)'}**")
-                st.write(row.get("review_body") or "")
+                st.markdown(f"**{row.get('title') or '(no title)'}**")
+                st.write(row.get("body") or "")
             with cols[1]:
-                st.metric("Rating", row.get("rating") or "-")
+                st.metric("Points", int(row.get("points") or 0))
                 st.metric("Sentiment", f"{(row.get('sentiment_score') or 0):+.2f}")
-                if row.get("review_date"):
-                    st.caption(str(row["review_date"]))
-                if row.get("reviewer_role"):
-                    st.caption(row["reviewer_role"])
+                if row.get("mention_date"):
+                    st.caption(str(row["mention_date"]))
+                kind = row.get("mention_type")
+                author = row.get("author")
+                meta = " · ".join(x for x in [kind, f"@{author}" if author else None] if x)
+                if meta:
+                    st.caption(meta)
 
 
 render()

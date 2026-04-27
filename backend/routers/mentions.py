@@ -1,4 +1,4 @@
-"""Review + funding + sentiment-trend endpoints."""
+"""Mention + funding + sentiment-trend endpoints."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_session
-from schemas import FundingRound, Review, SentimentTrendPoint
+from schemas import FundingRound, Mention, SentimentTrendPoint
 
-router = APIRouter(prefix="/companies", tags=["reviews"])
+router = APIRouter(prefix="/companies", tags=["mentions"])
 
 
 async def _resolve_slug(session: AsyncSession, name: str) -> str:
@@ -28,26 +28,26 @@ async def _resolve_slug(session: AsyncSession, name: str) -> str:
 
 
 @router.get(
-    "/{name}/reviews",
-    response_model=list[Review],
-    summary="Recent reviews with sentiment",
+    "/{name}/mentions",
+    response_model=list[Mention],
+    summary="Recent HackerNews mentions with sentiment",
 )
-async def get_reviews(
+async def get_mentions(
     name: str = Path(...),
     limit: int = Query(50, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
-) -> list[Review]:
+) -> list[Mention]:
     slug = await _resolve_slug(session, name)
     sql = """
-        SELECT review_id, review_title, review_body, rating,
-               reviewer_role, review_date, sentiment_score
-          FROM staging.stg_reviews
+        SELECT mention_id, mention_type, title, body, points,
+               author, mention_date, sentiment_score
+          FROM staging.stg_mentions
          WHERE company_slug = :slug
-         ORDER BY review_date DESC NULLS LAST, review_id
+         ORDER BY mention_date DESC NULLS LAST, points DESC, mention_id
          LIMIT :limit
     """
     rows = (await session.execute(text(sql), {"slug": slug, "limit": limit})).mappings().all()
-    return [Review(**row) for row in rows]
+    return [Mention(**row) for row in rows]
 
 
 @router.get(
@@ -83,7 +83,7 @@ async def get_sentiment_trend(
     slug = await _resolve_slug(session, name)
     sql = """
         SELECT month_start, avg_sentiment, sentiment_3mo_avg,
-               review_count, avg_rating
+               mention_count, avg_points
           FROM marts.sentiment_trend
          WHERE company_slug = :slug
          ORDER BY month_start ASC

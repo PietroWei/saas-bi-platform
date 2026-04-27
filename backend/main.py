@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from database import engine
-from routers import companies, health_score, reviews
+from routers import companies, health_score, mentions
 from settings import get_settings
 
 settings = get_settings()
@@ -24,13 +24,24 @@ log = logging.getLogger("bi.backend")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Verify DB connectivity on startup, dispose the engine on shutdown."""
+    """Verify DB connectivity on startup, dispose the engine on shutdown.
+
+    A connection failure is logged but does not prevent the process from
+    starting. This keeps ``/health`` reachable so platform health checks
+    (Railway, Kubernetes) can surface a clear status while the operator
+    fixes the DATABASE_URL.
+    """
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         log.info("Database connection OK.")
-    except Exception as exc:  # pragma: no cover - diagnostic only
-        log.exception("Database connection failed at startup: %s", exc)
+    except Exception as exc:
+        log.exception(
+            "Database connection failed at startup. "
+            "Check DATABASE_URL points at a reachable Postgres / Supabase. "
+            "Underlying error: %s",
+            exc,
+        )
     yield
     await engine.dispose()
 
@@ -44,7 +55,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list or ["*"],
     allow_methods=["GET"],
     allow_headers=["*"],
 )
@@ -52,10 +63,17 @@ app.add_middleware(
 
 @app.get("/health", tags=["meta"])
 async def health() -> dict[str, str]:
-    """Liveness probe."""
-    return {"status": "ok", "env": settings.app_env}
+    """Liveness + DB-readiness probe."""
+    db_status = "ok"
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        log.warning("Health check could not reach the database: %s", exc)
+        db_status = "unreachable"
+    return {"status": "ok", "env": settings.app_env, "database": db_status}
 
 
 app.include_router(companies.router)
 app.include_router(health_score.router)
-app.include_router(reviews.router)
+app.include_router(mentions.router)

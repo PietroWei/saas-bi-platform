@@ -92,7 +92,7 @@ postgres → fastapi-backend → streamlit-frontend
 
 L'idea: invece di `docker compose up --build` che tira su tutto insieme, li facciamo partire uno alla volta per capire cosa fa ciascuno e vedere errori isolati.
 
-### 2.1 Step 1 - Database Postgres
+### 2.1 Step 1 — Database Postgres
 
 ```powershell
 docker compose up -d --build postgres
@@ -106,17 +106,17 @@ Verifica che sia su e sano:
 docker compose ps
 docker compose logs postgres --tail 30
 ```
-Cerca la riga `database system is ready to accept connections`. Lo stato nella colonna `STATUS` deve diventare `healthy` entro 30-60 secondi.
+Cerca la riga `database system is ready to accept connections`. Lo stato nella colonna `STATUS` deve diventare `healthy` entro 30–60 secondi.
 
 Cosa è successo: è stato creato il container `bi_postgres`, sono stati eseguiti gli script in `database/init/` (schemi `raw` e `marts` + tabelle raw), ed è stato creato anche il DB `airflow` per i metadati.
 
 **Test rapido** (entra nel DB):
 ```powershell
-docker compose exec postgres psql -U bi_user -d bi_platform -c "\dn"
+docker compose exec postgres psql -U PietroWei -d bi_platform -c "\dn" 
 ```
 Devi vedere gli schemi `raw` e `marts`.
 
-### 2.2 Step 2 - Airflow (init + webserver + scheduler)
+### 2.2 Step 2 — Airflow (init + webserver + scheduler)
 
 Airflow ha 3 servizi:
 - `airflow-init`: one-shot, crea le tabelle di metadati e l'utente admin
@@ -138,9 +138,9 @@ docker compose logs -f airflow-webserver
 
 Apri http://localhost:8080 → login `admin` / `admin` (o quello che hai messo in `.env`).
 
-> La prima build scarica l'immagine Airflow (~1 GB) e installa i `requirements.txt` → può impiegare 3-5 minuti. È normale.
+> La prima build scarica l'immagine Airflow (~1 GB) e installa i `requirements.txt` → può impiegare 3–5 minuti. È normale.
 
-### 2.3 Step 3 - dbt runner
+### 2.3 Step 3 — dbt runner
 
 ```powershell
 docker compose up -d --build dbt-runner
@@ -155,7 +155,7 @@ docker compose run --rm dbt-runner dbt debug
 
 > ⚠️ Non eseguire `dbt run` ora: le tabelle `raw.*` sono ancora vuote. Prima devi far girare i DAG (step 5).
 
-### 2.4 Step 4 - FastAPI backend
+### 2.4 Step 4 — FastAPI backend
 
 ```powershell
 docker compose up -d --build fastapi-backend
@@ -168,16 +168,16 @@ Apri http://localhost:8000/docs → Swagger UI con tutti gli endpoint. Prova `/h
 
 > Le rotte `/companies/...` ora rispondono vuoto o con 404 perché i mart sono vuoti. Normale.
 
-### 2.5 Step 5 - Streamlit frontend
+### 2.5 Step 5 — Streamlit frontend
 
 ```powershell
 docker compose up -d --build streamlit-frontend
 docker compose logs -f streamlit-frontend
 ```
 
-Apri http://localhost:8501. Vedrai l'app con grafici vuoti - popoliamo i dati nello step successivo.
+Apri http://localhost:8501. Vedrai l'app con grafici vuoti — popoliamo i dati nello step successivo.
 
-### 2.6 Step 6 - Popolare i dati (DAG + dbt)
+### 2.6 Step 6 — Popolare i dati (DAG + dbt)
 
 1. Vai su Airflow (http://localhost:8080), **unpause** e triggera in quest'ordine:
    - `g2_reviews_dag`
@@ -207,7 +207,7 @@ docker compose logs -f airflow-scheduler
 
 ### Entrare in un container per debug
 ```powershell
-docker compose exec postgres psql -U bi_user -d bi_platform
+docker compose exec postgres psql -U PietroWei -d bi_platform
 docker compose exec fastapi-backend bash
 ```
 
@@ -264,7 +264,7 @@ python airflow/dags/g2_reviews_dag.py
 | `AIRFLOW_FERNET_KEY` mancante al boot | Non hai generato la chiave: torna allo step 1.2. |
 | Porta già in uso (es. 8080 / 5432 / 8000) | Cambia la parte sinistra del mapping in `docker-compose.yml` (es. `"8001:8000"`). |
 | Streamlit mostra grafici vuoti | Step 2.6 non fatto: triggera i DAG e lancia `dbt build`. |
-| G2 scraper ritorna 0 righe | G2 fa rate-limit. Il DAG logga un warning ed esce pulito - riprova più tardi. |
+| G2 scraper ritorna 0 righe | G2 fa rate-limit. Il DAG logga un warning ed esce pulito — riprova più tardi. |
 | `dbt build` fallisce con "relation does not exist" | I DAG non sono ancora finiti: aspetta che siano verdi su Airflow prima di lanciare dbt. |
 | Windows: errori "line endings" o simili nei Dockerfile | In VS Code, forza CRLF→LF sui file del repo, oppure configura git con `git config --global core.autocrlf input`. |
 

@@ -1,6 +1,6 @@
 # SaaS BI Platform
 
-A self-hosted Business Intelligence platform that aggregates **public signals about SaaS, fintech and capital-markets vendors** - G2 reviews, Crunchbase funding rounds, and GitHub activity - and turns them into three views:
+A self-hosted Business Intelligence platform that aggregates **public signals about SaaS, fintech and capital-markets vendors** - HackerNews mentions (via Algolia), Crunchbase funding rounds, and GitHub activity - and turns them into three views:
 
 - **Company view** (*lato azienda*) - "how is my company perceived?"
 - **Analyst view** (*lato analyst*) - "is this company healthy? should I bet on it?"
@@ -88,7 +88,7 @@ First boot takes ~2 min (image builds, Airflow metadata init, Postgres seed).
 
 In Airflow, unpause and trigger:
 
-1. `g2_reviews_dag`
+1. `hackernews_dag`
 2. `crunchbase_dag`
 3. `github_activity_dag`
 
@@ -121,7 +121,7 @@ uvicorn backend.main:app --reload --port 8000
 streamlit run frontend/app/main.py
 
 # Parse a DAG file for syntax errors
-python airflow/dags/g2_reviews_dag.py
+python airflow/dags/hackernews_dag.py
 ```
 
 ---
@@ -139,7 +139,7 @@ saas-bi-platform/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── dags/
-│       ├── g2_reviews_dag.py       ← scrapes G2 listings (requests + bs4)
+│       ├── hackernews_dag.py       ← queries Algolia HN search (requests)
 │       ├── crunchbase_dag.py       ← pulls funding events
 │       └── github_activity_dag.py  ← pulls repo stats
 ├── dbt/
@@ -147,13 +147,13 @@ saas-bi-platform/
 │   ├── dbt_project.yml
 │   ├── profiles.yml
 │   └── models/
-│       ├── staging/                ← stg_reviews, stg_funding, stg_github + schema.yml
+│       ├── staging/                ← stg_mentions, stg_funding, stg_github + schema.yml
 │       └── marts/                  ← dim_companies, company_health_score, sentiment_trend, hiring_momentum + schema.yml
 ├── backend/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   ├── main.py
-│   └── routers/                    ← companies (incl. /compare), health_score, reviews
+│   └── routers/                    ← companies (incl. /compare), health_score, mentions
 ├── frontend/
 │   ├── Dockerfile
 │   ├── requirements.txt
@@ -197,7 +197,7 @@ The list lives in two places - keep them in sync when adding a new company:
 
 | Table                    | Grain                                | Source            |
 |--------------------------|--------------------------------------|-------------------|
-| `raw.g2_reviews`         | one row per review                   | G2 listing scrape |
+| `raw.hn_mentions`        | one row per HN story or comment      | Algolia HN Search |
 | `raw.crunchbase_funding` | one row per funding round            | Crunchbase API    |
 | `raw.github_activity`    | one row per repo / day snapshot      | GitHub API        |
 
@@ -222,7 +222,7 @@ Weighting of the health score lives in `dbt/models/marts/company_health_score.sq
 | GET    | `/companies/industries`                 | distinct industries (used by the Compare filter)     |
 | GET    | `/companies/compare?slug=a&slug=b…`     | side-by-side breakdown for 2-5 companies             |
 | GET    | `/companies/{name}/health-score`        | single 0-100 score + breakdown                       |
-| GET    | `/companies/{name}/reviews`             | reviews + sentiment                                  |
+| GET    | `/companies/{name}/mentions`            | HN mentions + sentiment                              |
 | GET    | `/companies/{name}/funding`             | funding timeline                                     |
 | GET    | `/companies/{name}/sentiment-trend`     | monthly sentiment series                             |
 
@@ -236,7 +236,7 @@ Interactive docs at http://localhost:8000/docs (Swagger UI, auto-generated).
 |---------|-----|
 | `AIRFLOW_FERNET_KEY` complaint at boot | Generate a real Fernet key and put it in `.env`. |
 | Streamlit shows empty charts | Trigger DAGs, then `docker compose run --rm dbt-runner dbt build`. |
-| G2 scraper returns 0 rows | G2 throttles aggressively - the DAG logs a warning and exits cleanly; rerun later. |
+| HN DAG returns 0 rows | Algolia is rate-limited or down - the DAG falls back to bundled samples and logs a warning. |
 | Port already in use | Change the left-hand port in `docker-compose.yml` (e.g. `8001:8000`). |
 
 Logs:

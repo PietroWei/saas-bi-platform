@@ -1,4 +1,9 @@
-"""Async SQLAlchemy engine + session factory."""
+"""Async SQLAlchemy engine + session factory.
+
+The engine is built from ``Settings.async_database_url`` so the same
+backend image runs locally (Docker Compose) and against Supabase on
+Railway with no code changes - only the env var differs.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +20,7 @@ from settings import get_settings
 settings = get_settings()
 
 engine = create_async_engine(
-    settings.database_url,
+    settings.async_database_url,
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,

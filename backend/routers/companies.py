@@ -98,7 +98,7 @@ async def compare_companies(
     stmt = text("""
         SELECT company_slug, company_name, industry, country, founded_year,
                health_score, sentiment_score_0_100, funding_score_0_100,
-               github_score_0_100, review_count_180d, total_raised_usd,
+               github_score_0_100, mention_count_180d, total_raised_usd,
                last_round_date, total_stars, total_commits_30d,
                total_contributors_30d, computed_at
           FROM marts.company_health_score

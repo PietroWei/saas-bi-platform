@@ -13,8 +13,5 @@ COPY . /app
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "app/main.py", \
-     "--server.port=8501", \
-     "--server.address=0.0.0.0", \
-     "--server.headless=true", \
-     "--browser.gatherUsageStats=false"]
+# Honour $PORT when set (Railway injects it), fall back to 8501 locally.
+CMD ["sh", "-c", "streamlit run app/main.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false"]

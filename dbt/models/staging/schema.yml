@@ -5,23 +5,26 @@ sources:
     schema: raw
     description: "Landing zone written directly by Airflow DAGs."
     tables:
-      - name: g2_reviews
+      - name: hn_mentions
       - name: crunchbase_funding
       - name: github_activity
 
 models:
-  - name: stg_reviews
-    description: "Cleaned view of G2 reviews."
+  - name: stg_mentions
+    description: "Cleaned view of HackerNews mentions (stories + comments)."
     columns:
-      - name: review_id
+      - name: mention_id
         tests: [not_null]
       - name: company_slug
         tests: [not_null]
-      - name: rating
+      - name: mention_type
+        tests:
+          - accepted_values:
+              values: ["story", "comment"]
+      - name: points
         tests:
           - dbt_utils.accepted_range:
-              min_value: 1
-              max_value: 5
+              min_value: 0
               inclusive: true
               config:
                 severity: warn

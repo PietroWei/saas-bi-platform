@@ -10,7 +10,7 @@ import streamlit as st
 from api_client import (
     get_funding,
     get_health_score,
-    get_reviews,
+    get_mentions,
     get_sentiment_trend,
     search_companies,
 )
@@ -21,19 +21,19 @@ st.set_page_config(page_title="Analyst View", page_icon="🔎", layout="wide")
 apply()
 
 
-def _red_flags(score: dict, reviews: list[dict], funding: list[dict]) -> list[str]:
+def _red_flags(score: dict, mentions: list[dict], funding: list[dict]) -> list[str]:
     """Compute ad-hoc warnings an analyst would care about."""
     flags: list[str] = []
     if score.get("health_score") is not None and score["health_score"] < 40:
         flags.append("Overall health score below 40/100 - broadly unhealthy.")
     if score.get("sentiment_score_0_100") is not None and score["sentiment_score_0_100"] < 45:
-        flags.append("Review sentiment below neutral - customers unhappy.")
+        flags.append("HN mention sentiment below neutral - perception is poor.")
     if score.get("github_score_0_100") is not None and score["github_score_0_100"] < 20:
         flags.append("GitHub activity very low - engineering output may be stalling.")
     if score.get("last_round_date") is None:
         flags.append("No funding rounds in the tracked recency window.")
-    if reviews and len(reviews) < 5:
-        flags.append(f"Only {len(reviews)} reviews captured - low confidence.")
+    if mentions and len(mentions) < 5:
+        flags.append(f"Only {len(mentions)} HN mentions captured - low confidence.")
     if funding:
         latest = max(r["announced_on"] for r in funding if r.get("announced_on"))
         if str(latest) < "2022-01-01":
@@ -82,7 +82,7 @@ def render() -> None:
     health_score_card.render(score)
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Reviews (180d)", score.get("review_count_180d") or 0)
+    c1.metric("HN mentions (180d)", score.get("mention_count_180d") or 0)
     c2.metric("Total raised (3y)", f"${(score.get('total_raised_usd') or 0)/1_000_000:.1f}M")
     c3.metric("GitHub stars", score.get("total_stars") or 0)
 
@@ -92,7 +92,7 @@ def render() -> None:
     funding_timeline.render(funding)
 
     st.divider()
-    st.subheader("Review sentiment trend")
+    st.subheader("HN mention sentiment trend")
     sentiment_chart.render(get_sentiment_trend(slug))
 
     st.divider()
@@ -104,7 +104,7 @@ def render() -> None:
 
     st.divider()
     st.subheader("🚩 Red flags")
-    flags = _red_flags(score, get_reviews(slug, limit=100), funding)
+    flags = _red_flags(score, get_mentions(slug, limit=100), funding)
     if not flags:
         st.success("No red flags surfaced by the current signals.")
     else:

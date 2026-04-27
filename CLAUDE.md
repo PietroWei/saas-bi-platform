@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-SaaS BI Platform - ingests public data about SaaS companies (G2 reviews, Crunchbase funding, GitHub activity), transforms it with dbt, serves it via FastAPI, and visualizes it in Streamlit. Everything is containerized.
+SaaS BI Platform - ingests public data about SaaS companies (HackerNews mentions via Algolia, Crunchbase funding, GitHub activity), transforms it with dbt, serves it via FastAPI, and visualizes it in Streamlit. Everything is containerized.
 
 ## Stack
 

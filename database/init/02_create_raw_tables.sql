@@ -5,29 +5,30 @@
 -- ======================================================================
 
 -- --------------------------------------------------------------------
--- raw.g2_reviews - scraped G2 reviews
+-- raw.hn_mentions - HackerNews mentions (stories + comments) per company
+-- Source: Algolia HN Search API (free, no auth).
 -- --------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS raw.g2_reviews (
+CREATE TABLE IF NOT EXISTS raw.hn_mentions (
     id              BIGSERIAL PRIMARY KEY,
     company_name    TEXT        NOT NULL,
     company_slug    TEXT        NOT NULL,
-    review_id       TEXT        NOT NULL,
-    review_title    TEXT,
-    review_body     TEXT,
-    rating          NUMERIC(3,2),
-    reviewer_role   TEXT,
-    reviewer_size   TEXT,
-    review_date     DATE,
+    mention_id      TEXT        NOT NULL,                  -- HN objectID
+    mention_type    TEXT        NOT NULL CHECK (mention_type IN ('story', 'comment')),
+    title           TEXT,                                  -- story title (nullable for comments)
+    body            TEXT,                                  -- story_text or comment_text (HTML stripped)
+    points          INTEGER     NOT NULL DEFAULT 0,        -- HN upvotes (comments are 0)
+    author          TEXT,
+    mention_date    DATE,
     sentiment_score NUMERIC(5,4),
     source_url      TEXT,
     ingested_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_g2_reviews UNIQUE (company_slug, review_id)
+    CONSTRAINT uq_hn_mentions UNIQUE (company_slug, mention_id)
 );
 
-CREATE INDEX IF NOT EXISTS ix_g2_reviews_company ON raw.g2_reviews (company_slug);
-CREATE INDEX IF NOT EXISTS ix_g2_reviews_date    ON raw.g2_reviews (review_date);
+CREATE INDEX IF NOT EXISTS ix_hn_mentions_company ON raw.hn_mentions (company_slug);
+CREATE INDEX IF NOT EXISTS ix_hn_mentions_date    ON raw.hn_mentions (mention_date);
 
-COMMENT ON TABLE raw.g2_reviews IS 'One row per individual G2 review.';
+COMMENT ON TABLE raw.hn_mentions IS 'One row per HackerNews story or comment mentioning a tracked company.';
 
 -- --------------------------------------------------------------------
 -- raw.crunchbase_funding - funding rounds

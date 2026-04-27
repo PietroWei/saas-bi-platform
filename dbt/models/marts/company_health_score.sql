@@ -3,7 +3,7 @@
 -- ===================================================================
 -- company_health_score
 -- Produces a 0-100 health score per tracked company by blending:
---   * sentiment      - mean of review sentiment in the last 180 days
+--   * sentiment      - mean of HN-mention sentiment in the last 180 days
 --   * funding        - recency-decayed sum of last funding rounds
 --   * github         - commits + contributors + star log, last snapshot
 -- Weights live in dbt_project.yml so they can be tuned per env.
@@ -14,12 +14,12 @@ with sentiment as (
         company_slug,
         max(company_name)                       as company_name,
         avg(sentiment_score) filter (
-            where review_date >= current_date - interval '180 day'
+            where mention_date >= current_date - interval '180 day'
         )                                       as avg_sentiment_180d,
         count(*) filter (
-            where review_date >= current_date - interval '180 day'
-        )                                       as review_count_180d
-    from {{ ref('stg_reviews') }}
+            where mention_date >= current_date - interval '180 day'
+        )                                       as mention_count_180d
+    from {{ ref('stg_mentions') }}
     group by company_slug
 ),
 
@@ -103,7 +103,7 @@ scored as (
             2
         )                                        as github_score_0_100,
 
-        s.review_count_180d,
+        s.mention_count_180d,
         f.total_raised_usd,
         f.last_round_date,
         g.total_stars,
@@ -130,7 +130,7 @@ select
       + funding_score_0_100   * {{ var('funding_weight')   }}
       + github_score_0_100    * {{ var('github_weight')    }}
     )::numeric, 2)                               as health_score,
-    review_count_180d,
+    mention_count_180d,
     total_raised_usd,
     last_round_date,
     total_stars,

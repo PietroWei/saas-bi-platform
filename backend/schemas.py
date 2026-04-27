@@ -26,7 +26,7 @@ class HealthScoreBreakdown(BaseModel):
     sentiment_score_0_100: float
     funding_score_0_100: float
     github_score_0_100: float
-    review_count_180d: Optional[int] = None
+    mention_count_180d: Optional[int] = None
     total_raised_usd: Optional[float] = None
     last_round_date: Optional[date] = None
     total_stars: Optional[int] = None
@@ -35,13 +35,14 @@ class HealthScoreBreakdown(BaseModel):
     computed_at: Optional[datetime] = None
 
 
-class Review(BaseModel):
-    review_id: str
-    review_title: Optional[str]
-    review_body: Optional[str]
-    rating: Optional[float]
-    reviewer_role: Optional[str]
-    review_date: Optional[date]
+class Mention(BaseModel):
+    mention_id: str
+    mention_type: str
+    title: Optional[str]
+    body: Optional[str]
+    points: int
+    author: Optional[str]
+    mention_date: Optional[date]
     sentiment_score: Optional[float]
 
 
@@ -59,5 +60,5 @@ class SentimentTrendPoint(BaseModel):
     month_start: date
     avg_sentiment: Optional[float]
     sentiment_3mo_avg: Optional[float]
-    review_count: int
-    avg_rating: Optional[float]
+    mention_count: int
+    avg_points: Optional[float]

@@ -95,7 +95,7 @@ def _comparison_table(breakdowns: list[dict]) -> None:
             "Sentiment / 100":      f"{b['sentiment_score_0_100']:.1f}",
             "Funding / 100":        f"{b['funding_score_0_100']:.1f}",
             "GitHub / 100":         f"{b['github_score_0_100']:.1f}",
-            "Reviews (180d)":       b.get("review_count_180d") or 0,
+            "HN mentions (180d)":   b.get("mention_count_180d") or 0,
             "Total raised (M$)":    f"{(b.get('total_raised_usd') or 0) / 1_000_000:,.1f}",
             "Last round":           b.get("last_round_date") or "-",
             "GitHub stars":         b.get("total_stars") or 0,
