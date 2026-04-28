@@ -16,6 +16,7 @@ x-airflow-common: &airflow-common
     AIRFLOW_CONN_POSTGRES_DEFAULT: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     APP_POSTGRES_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     GITHUB_TOKEN: ${GITHUB_TOKEN}
+    DATABASE_URL: ${DATABASE_URL}
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - airflow_logs:/opt/airflow/logs

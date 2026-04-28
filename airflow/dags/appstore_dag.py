@@ -179,11 +179,30 @@ SAMPLE_DATA: dict[str, dict[str, Any]] = {
 
 
 def _engine() -> Engine:
-    """Build a SQLAlchemy engine from DATABASE_URL (Supabase)."""
+    """Build a SQLAlchemy engine from DATABASE_URL and verify the connection.
+
+    Raises immediately with a clear error if the URL is missing or the
+    connection check fails. Normalizes ``postgresql+asyncpg://`` URLs to
+    the sync ``postgresql://`` form so the psycopg2 driver is used.
+    """
     url = os.environ.get("DATABASE_URL") or os.environ.get("APP_POSTGRES_URL")
     if not url:
-        raise RuntimeError("DATABASE_URL env var is not set")
-    return create_engine(url, pool_pre_ping=True, future=True)
+        raise RuntimeError(
+            "DATABASE_URL env var is not set. The DAG cannot run without "
+            "a Supabase / Postgres connection string."
+        )
+    if url.startswith("postgresql+asyncpg://"):
+        url = "postgresql://" + url[len("postgresql+asyncpg://"):]
+    try:
+        engine = create_engine(url, pool_pre_ping=True, future=True)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to connect to the database with DATABASE_URL: {exc}"
+        ) from exc
+    log.info("Connected to database successfully")
+    return engine
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=10))
@@ -279,6 +298,7 @@ def _bundled(slug: str, platform: str) -> dict[str, Any] | None:
 
 def _upsert_reviews(engine: Engine, slug: str, platform: str,
                     reviews: list[dict[str, Any]]) -> int:
+    """Insert review rows into ``raw.app_reviews``. Raises on database error."""
     if not reviews:
         return 0
     rows = [{
@@ -305,6 +325,8 @@ def _upsert_reviews(engine: Engine, slug: str, platform: str,
     """)
     with engine.begin() as conn:
         conn.execute(sql, rows)
+    log.info("Inserted %d rows into raw.app_reviews for %s/%s",
+             len(rows), slug, platform)
     return len(rows)
 
 
@@ -335,11 +357,16 @@ def _upsert_rating(engine: Engine, slug: str, platform: str,
     """)
     with engine.begin() as conn:
         conn.execute(sql, [row])
+    log.info("Inserted 1 row into raw.app_ratings for %s/%s", slug, platform)
     return 1
 
 
 def _process_company(engine: Engine, company: dict[str, str]) -> tuple[int, int]:
-    """Fetch + load both platforms for one company. Returns (reviews, aggregates)."""
+    """Fetch + load both platforms for one company. Returns (reviews, aggregates).
+
+    Scraper failures fall back to ``SAMPLE_DATA`` and the bundled rows are
+    written via the same engine. Database errors propagate to the caller.
+    """
     slug = company["slug"]
     apps = COMPANY_APPS.get(slug)
     if not apps:
@@ -354,37 +381,42 @@ def _process_company(engine: Engine, company: dict[str, str]) -> tuple[int, int]
     ):
         if not identifier:
             continue
+        # Scrapers throw a wide variety of internal exceptions (network,
+        # parsing, store rate limit). We catch only here so the bundled
+        # sample below can still write to the database.
         payload: dict[str, Any] | None = None
         try:
             payload = fetcher(slug, identifier)
         except Exception as exc:
-            log.warning("%s scrape failed for %s: %s", platform, slug, exc)
+            log.warning("%s scrape raised for %s: %s", platform, slug, exc)
 
         if not payload:
+            log.warning("API failed for %s (%s), using sample data",
+                        slug, platform)
             payload = _bundled(slug, platform)
-            if payload:
-                log.info("Using bundled %s sample for %s", platform, slug)
 
         if not payload:
+            log.info("No SAMPLE_DATA for %s (%s), skipping", slug, platform)
             continue
 
-        reviews_loaded += _upsert_reviews(engine, slug, platform,
-                                          payload.get("reviews") or [])
+        reviews = payload.get("reviews") or []
+        log.info("Fetched %d %s reviews for %s", len(reviews), platform, slug)
+        reviews_loaded += _upsert_reviews(engine, slug, platform, reviews)
         aggs_loaded += _upsert_rating(engine, slug, platform, payload)
     return reviews_loaded, aggs_loaded
 
 
 def ingest_app_reviews(**_: Any) -> None:
-    """DAG entrypoint: iterate companies, load reviews + aggregate ratings."""
+    """DAG entrypoint: iterate companies, load reviews + aggregate ratings.
+
+    Database errors are not swallowed: any failure in ``_process_company``
+    propagates so Airflow marks the task as failed.
+    """
     engine = _engine()
     total_reviews = 0
     total_aggs = 0
     for company in TRACKED_COMPANIES:
-        try:
-            reviews, aggs = _process_company(engine, company)
-        except Exception as exc:
-            log.exception("Hard failure for %s: %s", company["slug"], exc)
-            continue
+        reviews, aggs = _process_company(engine, company)
         total_reviews += reviews
         total_aggs += aggs
 

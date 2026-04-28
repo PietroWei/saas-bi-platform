@@ -122,11 +122,30 @@ SAMPLE_DATA: list[dict[str, Any]] = [
 
 
 def _engine() -> Engine:
-    """Build a SQLAlchemy engine from DATABASE_URL (Supabase)."""
+    """Build a SQLAlchemy engine from DATABASE_URL and verify the connection.
+
+    Raises immediately with a clear error if the URL is missing or the
+    connection check fails. Normalizes ``postgresql+asyncpg://`` URLs to
+    the sync ``postgresql://`` form so the psycopg2 driver is used.
+    """
     url = os.environ.get("DATABASE_URL") or os.environ.get("APP_POSTGRES_URL")
     if not url:
-        raise RuntimeError("DATABASE_URL env var is not set")
-    return create_engine(url, pool_pre_ping=True, future=True)
+        raise RuntimeError(
+            "DATABASE_URL env var is not set. The DAG cannot run without "
+            "a Supabase / Postgres connection string."
+        )
+    if url.startswith("postgresql+asyncpg://"):
+        url = "postgresql://" + url[len("postgresql+asyncpg://"):]
+    try:
+        engine = create_engine(url, pool_pre_ping=True, future=True)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to connect to the database with DATABASE_URL: {exc}"
+        ) from exc
+    log.info("Connected to database successfully")
+    return engine
 
 
 def _score_sentiment(text_: str) -> float:
@@ -214,7 +233,7 @@ def _bundled_rows_for(slug: str) -> list[dict[str, Any]]:
 
 
 def _upsert(engine: Engine, rows: list[dict[str, Any]]) -> int:
-    """Insert rows into ``raw.reddit_mentions`` with ON CONFLICT DO NOTHING."""
+    """Insert rows into ``raw.reddit_mentions``. Raises on database error."""
     if not rows:
         return 0
     sql = text("""
@@ -230,11 +249,17 @@ def _upsert(engine: Engine, rows: list[dict[str, Any]]) -> int:
     """)
     with engine.begin() as conn:
         conn.execute(sql, rows)
+    log.info("Inserted %d rows into raw.reddit_mentions", len(rows))
     return len(rows)
 
 
 def ingest_reddit_mentions(**_: Any) -> None:
-    """DAG entrypoint: loop tracked companies, query each subreddit, load rows."""
+    """DAG entrypoint: loop tracked companies, query each subreddit, load rows.
+
+    Reddit network failures fall back to ``SAMPLE_DATA`` and the bundled
+    rows are written to the database with the same engine. Database errors
+    propagate so Airflow marks the task failed.
+    """
     engine = _engine()
     total = 0
     for company in TRACKED_COMPANIES:
@@ -244,8 +269,8 @@ def ingest_reddit_mentions(**_: Any) -> None:
         for subreddit in SUBREDDITS:
             try:
                 posts = _fetch_subreddit_search(subreddit, company["query"])
-            except Exception as exc:
-                log.warning("Reddit fetch failed for r/%s %s: %s",
+            except requests.RequestException as exc:
+                log.warning("Reddit r/%s fetch failed for %s: %s",
                             subreddit, company["slug"], exc)
                 posts = []
             for post in posts:
@@ -256,17 +281,17 @@ def ingest_reddit_mentions(**_: Any) -> None:
             time.sleep(PER_REQUEST_SLEEP)
 
         if not company_rows:
+            log.warning("API failed for %s, using sample data", company["slug"])
             company_rows = _bundled_rows_for(company["slug"])
-            if company_rows:
-                log.info("Using %d bundled posts for %s",
-                         len(company_rows), company["slug"])
-        else:
-            log.info("Fetched %d live posts for %s",
-                     len(company_rows), company["slug"])
 
+        if not company_rows:
+            log.warning("No SAMPLE_DATA available for %s, skipping", company["slug"])
+            continue
+
+        log.info("Fetched %d rows for %s", len(company_rows), company["slug"])
         total += _upsert(engine, company_rows)
 
-    log.info("Reddit ingestion complete, %d rows attempted", total)
+    log.info("Reddit ingestion complete, %d total rows attempted", total)
 
 
 default_args = {

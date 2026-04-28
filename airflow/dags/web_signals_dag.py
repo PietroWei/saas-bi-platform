@@ -77,11 +77,30 @@ SAMPLE_DATA: dict[str, dict[str, int]] = {
 
 
 def _engine() -> Engine:
-    """Build a SQLAlchemy engine from DATABASE_URL (Supabase)."""
+    """Build a SQLAlchemy engine from DATABASE_URL and verify the connection.
+
+    Raises immediately with a clear error if the URL is missing or the
+    connection check fails. Normalizes ``postgresql+asyncpg://`` URLs to
+    the sync ``postgresql://`` form so the psycopg2 driver is used.
+    """
     url = os.environ.get("DATABASE_URL") or os.environ.get("APP_POSTGRES_URL")
     if not url:
-        raise RuntimeError("DATABASE_URL env var is not set")
-    return create_engine(url, pool_pre_ping=True, future=True)
+        raise RuntimeError(
+            "DATABASE_URL env var is not set. The DAG cannot run without "
+            "a Supabase / Postgres connection string."
+        )
+    if url.startswith("postgresql+asyncpg://"):
+        url = "postgresql://" + url[len("postgresql+asyncpg://"):]
+    try:
+        engine = create_engine(url, pool_pre_ping=True, future=True)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to connect to the database with DATABASE_URL: {exc}"
+        ) from exc
+    log.info("Connected to database successfully")
+    return engine
 
 
 def _month_starts(months: int = 12) -> list[datetime]:
@@ -204,6 +223,7 @@ def _build_rows(company: dict[str, str],
 
 
 def _upsert(engine: Engine, rows: list[dict[str, Any]]) -> int:
+    """Insert rows into ``raw.web_signals``. Raises on database error."""
     if not rows:
         return 0
     sql = text("""
@@ -220,11 +240,17 @@ def _upsert(engine: Engine, rows: list[dict[str, Any]]) -> int:
     """)
     with engine.begin() as conn:
         conn.execute(sql, rows)
+    log.info("Inserted %d rows into raw.web_signals", len(rows))
     return len(rows)
 
 
 def ingest_web_signals(**_: Any) -> None:
-    """DAG entrypoint: pull trends + HN monthly counts, load rows."""
+    """DAG entrypoint: pull trends + HN monthly counts, load rows.
+
+    Trends / HN failures fall back to ``SAMPLE_DATA`` and the bundled rows
+    are written to the database with the same engine. Database errors
+    propagate so Airflow marks the task failed.
+    """
     engine = _engine()
     total = 0
     for company in TRACKED_COMPANIES:
@@ -233,26 +259,26 @@ def ingest_web_signals(**_: Any) -> None:
         hn_counts: dict[datetime, int] | None = None
         try:
             trends = _fetch_trends(company["trend_term"])
-        except Exception as exc:
-            log.warning("Google Trends hard failure for %s: %s", company["slug"], exc)
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
+            log.warning("Google Trends failed for %s: %s", company["slug"], exc)
         try:
             hn_counts = _fetch_hn_monthly_counts(company["trend_term"])
-        except Exception as exc:
-            log.warning("Algolia HN hard failure for %s: %s", company["slug"], exc)
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
+            log.warning("Algolia HN failed for %s: %s", company["slug"], exc)
 
         rows = _build_rows(company, trends, hn_counts)
         if not rows:
+            log.warning("API failed for %s, using sample data", company["slug"])
             rows = _bundled_rows_for(company["slug"])
-            if rows:
-                log.info("Using %d bundled web-signal rows for %s",
-                         len(rows), company["slug"])
-        else:
-            log.info("Built %d live web-signal rows for %s",
-                     len(rows), company["slug"])
 
+        if not rows:
+            log.warning("No SAMPLE_DATA available for %s, skipping", company["slug"])
+            continue
+
+        log.info("Fetched %d rows for %s", len(rows), company["slug"])
         total += _upsert(engine, rows)
 
-    log.info("Web signals ingestion complete, %d rows attempted", total)
+    log.info("Web signals ingestion complete, %d total rows attempted", total)
 
 
 default_args = {
