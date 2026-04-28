@@ -40,6 +40,7 @@ There are seven steps. Plan on roughly thirty minutes the first time.
 > as well, the backend strips the libpq-only `sslmode` query parameter
 > automatically.
 
+postgresql://postgres:[YOUR-PASSWORD]@db.txlmalxgunjlavqacwjn.supabase.co:5432/postgres
 ---
 
 ## 2. Create the schemas and raw tables

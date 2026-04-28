@@ -5,3 +5,8 @@ pandas==2.2.2
 requests==2.32.3
 python-dotenv==1.0.1
 tenacity==9.0.0
+praw==7.8.1
+textblob==0.18.0.post0
+app-store-scraper==0.3.5
+google-play-scraper==1.2.7
+pytrends==4.9.2

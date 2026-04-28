@@ -3,192 +3,165 @@
 Guida in italiano per avviare il progetto **pezzo per pezzo** su Windows 11.
 Pensata per chi parte da zero: spiega *cosa installare*, *perché*, e *come lanciare ogni servizio* singolarmente prima di mettere su tutto lo stack.
 
+The whole guide is written in Italian (UI choice), but the platform itself runs in English.
+
 ---
 
 ## 0. Cosa ti serve (prerequisiti)
 
 | Strumento | Stato sulla tua macchina | Serve per |
 |---|---|---|
-| Python 3.12 (Anaconda) | ✅ già installato | sviluppo locale, generare le chiavi Airflow |
-| conda | ✅ già installato | creare l'ambiente `saas_bi` |
-| git | ✅ già installato | versionare il codice |
-| **Docker Desktop** | ❌ **DA INSTALLARE** | far girare tutto lo stack containerizzato |
+| Python 3.12 (Anaconda) | gia' installato | sviluppo locale, generare le chiavi Airflow |
+| conda | gia' installato | creare l'ambiente `saas_bi` |
+| git | gia' installato | versionare il codice |
+| **Docker Desktop** | **DA INSTALLARE** | far girare tutto lo stack containerizzato |
 
-### 0.1 Installare Docker Desktop (unica cosa che manca)
+### 0.1 Installare Docker Desktop
 
-1. Scarica l'installer da https://www.docker.com/products/docker-desktop/ → "Download for Windows".
+1. Scarica l'installer da https://www.docker.com/products/docker-desktop/ "Download for Windows".
 2. Esegui `Docker Desktop Installer.exe`. Lascia spuntata l'opzione **"Use WSL 2 instead of Hyper-V"** (raccomandata su Win 11).
 3. Al termine, **riavvia il PC** se richiesto.
-4. Avvia **Docker Desktop** dal menu Start e aspetta che l'icona della balena in basso a destra diventi **verde/stabile**. Serve che il demone sia attivo prima di qualsiasi `docker compose`.
+4. Avvia **Docker Desktop** dal menu Start e aspetta che l'icona della balena in basso a destra diventi **verde/stabile**.
 5. Verifica da PowerShell:
    ```powershell
    docker --version
    docker compose version
    docker info
    ```
-   Se `docker info` risponde senza errori → sei pronto.
+   Se `docker info` risponde senza errori sei pronto.
 
-> ⚠️ Se `docker info` dà errore "Cannot connect to the Docker daemon", significa che Docker Desktop non è ancora partito: apri l'app e aspetta.
+> Se `docker info` restituisce "Cannot connect to the Docker daemon", significa che Docker Desktop non e' ancora partito: aprilo e aspetta.
 
 ---
 
 ## 1. Configurare il file `.env`
 
-Il repo contiene `.env.example` come template. Il `.env` vero **NON** è versionato (è nel `.gitignore`).
+Il repo contiene `.env.example` come template. Il `.env` vero non e' versionato (e' nel `.gitignore`).
 
 ### 1.1 Copia il template
 
-Da PowerShell nella cartella del progetto:
 ```powershell
 Copy-Item .env.example .env
 ```
 
 ### 1.2 Genera le due chiavi Airflow
 
-Airflow ha bisogno di due segreti: una **Fernet key** (cripta le connessioni) e una **secret key** (firma i cookie della web UI).
-
 ```powershell
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-Se il primo comando dà `ModuleNotFoundError: cryptography`, installalo:
+Se il primo comando da' `ModuleNotFoundError: cryptography`, installalo:
 ```powershell
 pip install cryptography
 ```
 
-Copia i due output e incollali in `.env` al posto di:
-- `AIRFLOW_FERNET_KEY=replace_with_fernet_key_generated_locally`
-- `AIRFLOW_SECRET_KEY=replace_with_random_32_byte_hex`
+Copia i due output in `.env` al posto di `AIRFLOW_FERNET_KEY` e `AIRFLOW_SECRET_KEY`.
 
-### 1.3 Cambia la password Postgres (consigliato)
+### 1.3 Imposta `DATABASE_URL` (Supabase)
 
-In `.env`, sostituisci:
+I DAG nuovi (`reddit_dag`, `appstore_dag`, `web_signals_dag`) scrivono sullo schema `raw` di **Supabase**, non sul Postgres locale.
+
+In `.env` aggiungi (sostituendo eventuali placeholder):
 ```
-POSTGRES_PASSWORD=change_me_strong_password
+DATABASE_URL=postgresql://postgres:LA_TUA_PASSWORD@db.IL_TUO_REF.supabase.co:5432/postgres
 ```
-con una password a tuo piacere (niente spazi, niente caratteri esotici).
 
-### 1.4 (Opzionale) Token GitHub
+La connection string si copia da Supabase: **Project Settings, Database, Connection string, URI**.
 
-Se vuoi far girare il DAG `github_activity_dag` senza limiti di rate (passi da 60 a 5000 req/h):
-1. Vai su https://github.com/settings/tokens
-2. "Generate new token (classic)" → scope `public_repo`
-3. Incolla in `.env` alla riga `GITHUB_TOKEN=`
+### 1.4 Crea le tabelle raw su Supabase
 
-Senza token il DAG funziona comunque, solo più lento.
+Apri Supabase, **SQL Editor, New query**, e lancia in ordine:
+
+1. `database/init/01_create_schemas.sql` (crea `raw`, `staging`, `marts`)
+2. `database/migrations/002_new_raw_tables.sql` (crea `reddit_mentions`, `app_reviews`, `app_ratings`, `web_signals`)
 
 ---
 
 ## 2. Avvio pezzo per pezzo
 
-Lo stack è composto da 6 servizi Docker. La dipendenza è:
+Lo stack e' composto da 6 servizi Docker. Dipendenze:
 
 ```
-postgres → airflow-init → airflow-webserver + airflow-scheduler
-postgres → dbt-runner
-postgres → fastapi-backend → streamlit-frontend
+postgres -> airflow-init -> airflow-webserver + airflow-scheduler
+postgres -> dbt-runner
+postgres -> fastapi-backend -> streamlit-frontend
 ```
 
-L'idea: invece di `docker compose up --build` che tira su tutto insieme, li facciamo partire uno alla volta per capire cosa fa ciascuno e vedere errori isolati.
-
-### 2.1 Step 1 — Database Postgres
+### 2.1 Step 1, Database Postgres locale (per Airflow + dev)
 
 ```powershell
 docker compose up -d --build postgres
-```
-
-- `-d` = detached (gira in background)
-- `--build` = (ri)costruisce l'immagine se serve
-
-Verifica che sia su e sano:
-```powershell
 docker compose ps
 docker compose logs postgres --tail 30
 ```
-Cerca la riga `database system is ready to accept connections`. Lo stato nella colonna `STATUS` deve diventare `healthy` entro 30–60 secondi.
 
-Cosa è successo: è stato creato il container `bi_postgres`, sono stati eseguiti gli script in `database/init/` (schemi `raw` e `marts` + tabelle raw), ed è stato creato anche il DB `airflow` per i metadati.
+Cerca la riga `database system is ready to accept connections`. Lo stato deve diventare `healthy` entro 30-60 secondi.
 
-**Test rapido** (entra nel DB):
-```powershell
-docker compose exec postgres psql -U PietroWei -d bi_platform -c "\dn" 
-```
-Devi vedere gli schemi `raw` e `marts`.
+> Nota: i DAG scrivono i dati ingest su **Supabase** (tramite `DATABASE_URL`).
+> Il Postgres locale serve principalmente al metadato di Airflow.
 
-### 2.2 Step 2 — Airflow (init + webserver + scheduler)
-
-Airflow ha 3 servizi:
-- `airflow-init`: one-shot, crea le tabelle di metadati e l'utente admin
-- `airflow-webserver`: la UI su :8080
-- `airflow-scheduler`: esegue i DAG
-
-Partono in sequenza grazie ai `depends_on` del compose.
+### 2.2 Step 2, Airflow (init + webserver + scheduler)
 
 ```powershell
 docker compose up -d --build airflow-init
 docker compose logs -f airflow-init
 ```
-Aspetta che `airflow-init` finisca con exit code 0 (il log smetterà di aggiornarsi e nel `ps` lo vedrai `Exited (0)`). Poi:
+
+Aspetta che `airflow-init` finisca con exit code 0. Poi:
 
 ```powershell
 docker compose up -d airflow-webserver airflow-scheduler
 docker compose logs -f airflow-webserver
 ```
 
-Apri http://localhost:8080 → login `admin` / `admin` (o quello che hai messo in `.env`).
+Apri http://localhost:8080, login `admin` / `admin` (o quello che hai messo in `.env`).
 
-> La prima build scarica l'immagine Airflow (~1 GB) e installa i `requirements.txt` → può impiegare 3–5 minuti. È normale.
+> La prima build scarica l'immagine Airflow (~1 GB) e installa i `requirements.txt` con `praw`, `textblob`, `app-store-scraper`, `google-play-scraper`, `pytrends`. Puo' impiegare 3-5 minuti.
 
-### 2.3 Step 3 — dbt runner
+### 2.3 Step 3, dbt runner
 
 ```powershell
 docker compose up -d --build dbt-runner
-```
-
-Questo container resta **idle** (fa `tail -f /dev/null`) apposta: lo usi solo per eseguire comandi dbt on-demand. Verifica che parta:
-```powershell
 docker compose run --rm dbt-runner dbt --version
 docker compose run --rm dbt-runner dbt debug
 ```
-`dbt debug` ti conferma che si collega a Postgres. Se risponde `All checks passed!` sei a posto.
 
-> ⚠️ Non eseguire `dbt run` ora: le tabelle `raw.*` sono ancora vuote. Prima devi far girare i DAG (step 5).
+`dbt debug` conferma la connessione. Se dice `All checks passed!` sei a posto.
 
-### 2.4 Step 4 — FastAPI backend
+> Non eseguire `dbt run` ora: le tabelle `raw.*` su Supabase sono ancora vuote. Prima fai partire i DAG (step 6).
+
+### 2.4 Step 4, FastAPI backend
 
 ```powershell
 docker compose up -d --build fastapi-backend
 docker compose logs -f fastapi-backend
 ```
 
-Aspetta la riga `Uvicorn running on http://0.0.0.0:8000`.
+Aspetta `Uvicorn running on http://0.0.0.0:8000`. Apri http://localhost:8000/docs e prova `/health`.
 
-Apri http://localhost:8000/docs → Swagger UI con tutti gli endpoint. Prova `/health`: deve rispondere `{"status":"ok"}` (o simile).
-
-> Le rotte `/companies/...` ora rispondono vuoto o con 404 perché i mart sono vuoti. Normale.
-
-### 2.5 Step 5 — Streamlit frontend
+### 2.5 Step 5, Streamlit frontend
 
 ```powershell
 docker compose up -d --build streamlit-frontend
 docker compose logs -f streamlit-frontend
 ```
 
-Apri http://localhost:8501. Vedrai l'app con grafici vuoti — popoliamo i dati nello step successivo.
+Apri http://localhost:8501.
 
-### 2.6 Step 6 — Popolare i dati (DAG + dbt)
+### 2.6 Step 6, Popolare i dati (DAG + dbt)
 
-1. Vai su Airflow (http://localhost:8080), **unpause** e triggera in quest'ordine:
-   - `g2_reviews_dag`
-   - `crunchbase_dag`
-   - `github_activity_dag`
-2. Quando sono verdi, lancia la trasformazione:
+1. Su Airflow (http://localhost:8080), **unpause** e triggera in quest'ordine:
+   - `reddit_dag`        (giornaliero, post Reddit + sentiment TextBlob)
+   - `appstore_dag`      (giornaliero, recensioni iOS + Android e rating aggregati)
+   - `web_signals_dag`   (settimanale, Google Trends + proxy HN)
+
+2. Quando i DAG sono verdi:
    ```powershell
    docker compose run --rm dbt-runner dbt build
    ```
-   `dbt build` = `run` (materializza i modelli) + `test` (esegue i test sulle colonne). Output atteso: tutti i modelli in `staging` e `marts` completati con `OK`.
-3. Ricarica http://localhost:8501 → i dashboard mostrano i dati.
+
+3. Ricarica http://localhost:8501.
 
 ---
 
@@ -199,7 +172,7 @@ Apri http://localhost:8501. Vedrai l'app con grafici vuoti — popoliamo i dati 
 docker compose ps
 ```
 
-### Log di un singolo servizio (`-f` = follow live)
+### Log di un singolo servizio
 ```powershell
 docker compose logs -f fastapi-backend
 docker compose logs -f airflow-scheduler
@@ -221,12 +194,14 @@ docker compose stop
 docker compose down
 ```
 
-### RESET TOTALE (⚠️ cancella anche i dati Postgres)
+### RESET TOTALE (cancella anche i dati Postgres locali)
 ```powershell
 docker compose down -v
 ```
 
-### Rebuild di un singolo servizio dopo modifiche al Dockerfile o requirements
+> Le tabelle su Supabase non vengono toccate da `down -v`. Per resettarle, droppa e ricrea via SQL Editor.
+
+### Rebuild di un singolo servizio
 ```powershell
 docker compose up -d --build fastapi-backend
 ```
@@ -235,23 +210,23 @@ docker compose up -d --build fastapi-backend
 
 ## 4. Sviluppo locale senza Docker (opzionale)
 
-Utile per iterare velocemente su codice Python senza ricostruire l'immagine.
-
 ```powershell
 conda env create -f environment.yml
 conda activate saas_bi
 ```
 
-Poi, con Postgres già su via Docker:
+Poi, con Postgres gia' su via Docker:
 ```powershell
-# API da locale (ricaricamento automatico)
+# API da locale
 uvicorn backend.main:app --reload --port 8000
 
 # Streamlit da locale
 streamlit run frontend/app/main.py
 
 # Validare la sintassi di un DAG
-python airflow/dags/g2_reviews_dag.py
+python airflow/dags/reddit_dag.py
+python airflow/dags/appstore_dag.py
+python airflow/dags/web_signals_dag.py
 ```
 
 ---
@@ -260,13 +235,15 @@ python airflow/dags/g2_reviews_dag.py
 
 | Sintomo | Soluzione |
 |---|---|
-| `docker: command not found` / `Cannot connect to the Docker daemon` | Docker Desktop non è avviato. Aprilo e aspetta la balena verde. |
+| `docker: command not found` o `Cannot connect to the Docker daemon` | Docker Desktop non e' avviato. Aprilo e aspetta. |
 | `AIRFLOW_FERNET_KEY` mancante al boot | Non hai generato la chiave: torna allo step 1.2. |
-| Porta già in uso (es. 8080 / 5432 / 8000) | Cambia la parte sinistra del mapping in `docker-compose.yml` (es. `"8001:8000"`). |
+| Porta gia' in uso (es. 8080 / 5432 / 8000) | Cambia la parte sinistra del mapping in `docker-compose.yml`. |
 | Streamlit mostra grafici vuoti | Step 2.6 non fatto: triggera i DAG e lancia `dbt build`. |
-| G2 scraper ritorna 0 righe | G2 fa rate-limit. Il DAG logga un warning ed esce pulito — riprova più tardi. |
-| `dbt build` fallisce con "relation does not exist" | I DAG non sono ancora finiti: aspetta che siano verdi su Airflow prima di lanciare dbt. |
-| Windows: errori "line endings" o simili nei Dockerfile | In VS Code, forza CRLF→LF sui file del repo, oppure configura git con `git config --global core.autocrlf input`. |
+| `reddit_dag` ritorna 0 righe per una company | Reddit ha rate-limited o e' temporaneamente irragiungibile. Il DAG usa `SAMPLE_DATA` come fallback. |
+| `appstore_dag` salta Murex/Bloomberg/Slack | Atteso: niente app consumer, viene loggato e si va avanti. |
+| `web_signals_dag` Google Trends 429 | pytrends fa rate-limit pesante. Il DAG cade nel fallback bundled. |
+| `dbt build` fallisce con "relation does not exist" | I DAG non hanno ancora popolato Supabase: aspetta che siano verdi. |
+| Errori line-endings nei Dockerfile | `git config --global core.autocrlf input`. |
 
 ---
 
@@ -277,9 +254,14 @@ python airflow/dags/g2_reviews_dag.py
 
 # 1. Configura le variabili d'ambiente
 Copy-Item .env.example .env
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # → AIRFLOW_FERNET_KEY
-python -c "import secrets; print(secrets.token_hex(32))"                                    # → AIRFLOW_SECRET_KEY
-# (modifica .env a mano con i due valori)
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+python -c "import secrets; print(secrets.token_hex(32))"
+# (modifica .env: incolla i due valori e DATABASE_URL di Supabase)
+
+# 1.b Crea le tabelle raw su Supabase
+#  Esegui in SQL Editor:
+#  - database/init/01_create_schemas.sql
+#  - database/migrations/002_new_raw_tables.sql
 
 # 2. Avvio graduale
 docker compose up -d --build postgres
@@ -290,13 +272,11 @@ docker compose up -d --build fastapi-backend
 docker compose up -d --build streamlit-frontend
 
 # 3. Popola i dati
-#  → Airflow UI http://localhost:8080 : unpausa e triggera i 3 DAG
+#  Airflow UI http://localhost:8080 : unpausa e triggera reddit_dag, appstore_dag, web_signals_dag
 docker compose run --rm dbt-runner dbt build
 
 # 4. Controlla
-#  http://localhost:8080  → Airflow
-#  http://localhost:8000/docs → FastAPI Swagger
-#  http://localhost:8501  → Streamlit
+#  http://localhost:8080  Airflow
+#  http://localhost:8000/docs  FastAPI Swagger
+#  http://localhost:8501  Streamlit
 ```
-
-Fine. Quando Docker Desktop sarà installato, possiamo ripercorrere questa sequenza insieme, un comando alla volta.
